@@ -7,10 +7,12 @@ load_dotenv()
 
 # Get the pdf filenames
 pdf_files = []
+file_streams = []
 for root, dirs, files in os.walk(".data/leads"):
     for file in files:
         if file.endswith(".pdf"):
             pdf_files.append(os.path.join(root, file))
+            file_streams.append(open(os.path.join(root, file), "rb"))
 
 # Create the assistant
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -22,21 +24,28 @@ assistant = client.beta.assistants.create(
 )
 
 # Create the vector store
-vector_store = client.beta.vector_stores.create(name="Leads")
-file_streams = [open(file, "rb") for file in pdf_files]
-file_batch = client.beta.vector_stores.file_batches.upload_and_poll(
-    vector_store_id=vector_store.id, files=file_streams
-)
-print(file_batch.status)
-print(file_batch.file_counts)
+# vector_store = client.beta.vector_stores.create(name="Leads")
+# file_batch = client.beta.vector_stores.file_batches.upload_and_poll(
+#     vector_store_id=vector_store.id, files=file_streams
+# )
+# print(file_batch.status)
+# print(file_batch.file_counts)
 
 # Update assistant to use the vector store
-assistant = client.beta.assistants.update(
-    assistant_id=assistant.id,
-    tool_resources={"file_search": {"vector_store_ids": [vector_store.id]}},
-)
+# assistant = client.beta.assistants.update(
+#     assistant_id=assistant.id,
+#     tool_resources={"file_search": {"vector_store_ids": [vector_store.id]}},
+# )
 
 # Create a thread
+for file in file_streams:
+    response = client.beta.threads.create_and_run_poll(
+        assistant_id=assistant.id,
+        message={
+            "role": "user",
+            "content": "Parse the leads from the PDF files into a json list.",
+        },
+    )
 thread = client.beta.threads.create()
 message = client.beta.threads.messages.create(
     thread_id=thread.id,
